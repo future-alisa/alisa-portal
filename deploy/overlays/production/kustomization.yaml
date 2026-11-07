@@ -10,3 +10,4 @@ images:
   - name: alisa-portal-web
     newName: registry.kind.internal:5000/alisa-portal-web
     newTag: src-82245b16d03a
+    digest: sha256:9c41e18559489b5b90d40e94180150af005f97e559762566f0f530fee0642ac1

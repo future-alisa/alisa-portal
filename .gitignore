@@ -51,3 +51,6 @@ backend/server
 # Python tooling cache
 __pycache__/
 *.pyc
+
+# Environment-specific gateway configuration
+deploy/local/
