@@ -6,11 +6,11 @@ metadata:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: portal-registry-check
+  name: portal-registry-details
   namespace: alisa-portal
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 120
+  activeDeadlineSeconds: 180
   template:
     spec:
       automountServiceAccountToken: false
@@ -20,7 +20,13 @@ spec:
           image: curlimages/curl:8.17.0
           command: [sh, -c]
           args:
-            - 'curl --max-time 20 -sS -o /dev/null -w "registry_http_status=%{http_code}\n" http://registry.kind.internal:5000/v2/'
+            - |
+              echo INTERNAL_HTTP
+              curl --max-time 20 -sS -i http://registry.kind.internal:5000/v2/ || true
+              echo INTERNAL_HTTPS
+              curl --max-time 20 -sS -i https://registry.kind.internal:5000/v2/ || true
+              echo PUBLIC_HTTPS
+              curl --max-time 20 -sS -i https://alisa-registry.cpolar.top/v2/ || true
           resources:
             requests: {cpu: 10m, memory: 16Mi}
             limits: {cpu: 100m, memory: 64Mi}

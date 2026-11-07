@@ -12,6 +12,8 @@ spec:
       labels:
         app.kubernetes.io/name: portal-web
     spec:
+      imagePullSecrets:
+        - name: portal-registry-auth
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true

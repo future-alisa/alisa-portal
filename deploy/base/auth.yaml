@@ -1,0 +1,9 @@
+# The value is generated and injected through Argo CD after the first sync.
+# Do not add a token to this file.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: portal-auth
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+type: Opaque

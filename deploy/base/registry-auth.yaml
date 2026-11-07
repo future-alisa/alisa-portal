@@ -1,0 +1,11 @@
+# Populate through the Argo CD resource API; credentials never belong in Git.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: portal-registry-auth
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+type: kubernetes.io/dockerconfigjson
+# Kubernetes requires valid JSON for this Secret type. Live credentials are injected later.
+data:
+  .dockerconfigjson: eyJhdXRocyI6e319

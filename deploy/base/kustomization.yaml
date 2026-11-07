@@ -6,3 +6,6 @@ resources:
   - pvc.yaml
   - api.yaml
   - web.yaml
+  - route.yaml
+  - auth.yaml
+  - registry-auth.yaml

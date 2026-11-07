@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: alisa-portal-api
+    newName: alisa-registry.cpolar.top/alisa-portal-api
+    newTag: src-82245b16d03a
+  - name: alisa-portal-web
+    newName: alisa-registry.cpolar.top/alisa-portal-web
+    newTag: src-82245b16d03a

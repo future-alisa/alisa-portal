@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alisa-portal
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/future-alisa/alisa-portal.git
+    targetRevision: main
+    path: deploy/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: alisa-portal
+  ignoreDifferences:
+    - group: ''
+      kind: Secret
+      name: portal-auth
+      namespace: alisa-portal
+      jsonPointers: [/data]
+    - group: ''
+      kind: Secret
+      name: portal-registry-auth
+      namespace: alisa-portal
+      jsonPointers: [/data]
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 1m

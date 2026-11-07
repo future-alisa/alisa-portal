@@ -77,3 +77,7 @@ Go 测试覆盖令牌认证、租户唯一性、部署清单生成、配额校�
 ## Prometheus 监控
 
 在 Go 服务环境中配置 `PROMETHEUS_URL=http://prometheus:9090`，可选 `PROMETHEUS_TOKEN`。刷新门户后读取汇总指标。需要 node-exporter 与 kube-state-metrics；空查询结果显示暂无数据。地址和令牌由服务端配置，不通过浏览器提交。当前只有即时指标，没有历史趋势、日志和告警连接器。Compose 可在 api.environment 中增加这些配置。
+
+## Kubernetes / Argo CD
+
+生产清单位于 `deploy/overlays/production`，Application 位于 `deploy/argocd/application.yaml`。私有 Registry 镜像构建、Secret 注入、根域名入口和回滚说明参见 [Argo CD 部署](docs/deployment.md)。
