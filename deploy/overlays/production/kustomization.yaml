@@ -6,6 +6,7 @@ images:
   - name: alisa-portal-api
     newName: alisa-registry.cpolar.top/alisa-portal-api
     newTag: src-82245b16d03a
+    digest: sha256:394208b7bd6c604daffe870473bb747d7944b89c523ce517d37c7b3e0d3f286d
   - name: alisa-portal-web
     newName: alisa-registry.cpolar.top/alisa-portal-web
     newTag: src-82245b16d03a

@@ -2,7 +2,7 @@
 
 ## 交付链路
 
-已跟踪的前后端源码 → 集群内 Kaniko 构建 → 私有 Registry → Argo CD 同步 Deployment → Kubernetes 拉取镜像。
+前端源码 → 集群内 Kaniko 构建；Go 后端 → Linux amd64 交叉编译与 OCI 镜像打包。两者均先推送至私有 Registry，再由 Argo CD 同步 Deployment，Kubernetes 拉取镜像。
 
 - 环境入口：`https://alisa.vip.cpolar.cn/`。
 - 应用名：`alisa-portal`；命名空间：`alisa-portal`。
@@ -34,6 +34,19 @@ python3 scripts/make-build-context.py \
 输出 `build-manifests.json` 可通过 Argo CD 本地清单同步执行（每个对象需 JSON 序列化为字符串），也可由有权限的管理员使用 kubectl 逐个创建。构建 Pod 使用 `portal-registry-auth`，不挂载 ServiceAccount 令牌、Docker socket 或宿主机目录。两份 Dockerfile 分别构建 Linux 节点架构对应的镜像。
 
 这是首次部署的构建入口；尚未安装定时构建器或 GitHub Actions runner。新版本按相同步骤构建、推送、更新标签、同步。
+
+### 网络受限时的构建
+
+可为构建命令添加 `--proxy http://YOUR_PROXY_HOST:PORT`。仅用于构建器下载和 Dockerfile RUN 的代理构建参数，不写入最终镜像环境。使用 `--component web` 只构建前端，`--attempt` 区分重试 Job。仓库连接的代理应在 Argo CD 单独配置，不修改集群全局代理。
+
+后端也可使用已验证的本机 Go 工具链交叉编译，再通过 crane 复用你仓库已有的 Alpine 3.22 打包：
+
+```sh
+DOCKER_CONFIG=/path/to/private/config CRANE=crane \
+  sh scripts/package-api-image.sh YOUR_REGISTRY_HOST SOURCE_TAG
+```
+
+crane 来自 Google 开源 go-containerregistry。凭据配置目录不应位于 Git 中，部署结束后清理临时配置。
 
 ## 根路径 Caddy 转发参考
 

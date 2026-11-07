@@ -13,6 +13,10 @@ import argparse
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--registry', required=True, help='Registry hostname without scheme')
+parser.add_argument('--proxy', help='Optional HTTP CONNECT proxy for upstream downloads')
+parser.add_argument('--component', choices=['api', 'web', 'both'], default='both')
+parser.add_argument('--registry-mirror', help='Optional trusted Docker Hub mirror')
+parser.add_argument('--attempt', default='1', help='Unique build attempt suffix')
 parser.add_argument('--output', required=True, type=Path, help='Output directory outside Git')
 args = parser.parse_args()
 tracked = subprocess.check_output(['git', 'ls-files', '-z', 'backend', 'frontend'], cwd=root).decode().split('\0')
@@ -33,7 +37,16 @@ if len(json.dumps(cm)) > 900000:
     raise SystemExit('Build context exceeds ConfigMap size budget; use CI/object storage instead')
 resources = [cm]
 for component, directory in [('api', 'backend'), ('web', 'frontend')]:
-    job = {'apiVersion': 'batch/v1', 'kind': 'Job', 'metadata': {'name': f'portal-build-{component}-{tag}', 'namespace': 'alisa-portal'}, 'spec': {'backoffLimit': 0, 'activeDeadlineSeconds': 2400, 'template': {'spec': {'automountServiceAccountToken': False, 'restartPolicy': 'Never', 'initContainers': [{'name': 'unpack', 'image': 'busybox:1.37.0', 'command': ['sh', '-c', 'tar -xzf /bundle/source.tar.gz -C /workspace'], 'volumeMounts': [{'name': 'bundle', 'mountPath': '/bundle', 'readOnly': True}, {'name': 'workspace', 'mountPath': '/workspace'}]}], 'containers': [{'name': 'build', 'image': 'ghcr.io/osscontainertools/kaniko:v1.29.0', 'args': [f'--context=dir:///workspace/{directory}', f'--dockerfile=/workspace/{directory}/Dockerfile', f'--destination={args.registry}/alisa-portal-{component}:{tag}', '--build-arg=API_URL=http://api:8080', '--cache=false', '--compressed-caching=false', '--reproducible'], 'resources': {'requests': {'cpu': '250m', 'memory': '512Mi'}, 'limits': {'cpu': '2', 'memory': '2Gi'}}, 'volumeMounts': [{'name': 'workspace', 'mountPath': '/workspace'}, {'name': 'registry-auth', 'mountPath': '/kaniko/.docker', 'readOnly': True}]}], 'volumes': [{'name': 'bundle', 'configMap': {'name': cm['metadata']['name']}}, {'name': 'workspace', 'emptyDir': {'sizeLimit': '4Gi'}}, {'name': 'registry-auth', 'secret': {'secretName': 'portal-registry-auth', 'items': [{'key': '.dockerconfigjson', 'path': 'config.json'}]}}]}}}}
+    if args.component != 'both' and component != args.component:
+        continue
+    job = {'apiVersion': 'batch/v1', 'kind': 'Job', 'metadata': {'name': f'portal-build-{component}-{tag}-{args.attempt}', 'namespace': 'alisa-portal'}, 'spec': {'backoffLimit': 0, 'activeDeadlineSeconds': 2400, 'template': {'spec': {'automountServiceAccountToken': False, 'restartPolicy': 'Never', 'initContainers': [{'name': 'unpack', 'image': 'curlimages/curl:8.17.0', 'securityContext': {'runAsUser': 0}, 'command': ['sh', '-c', 'tar -xzf /bundle/source.tar.gz -C /workspace'], 'volumeMounts': [{'name': 'bundle', 'mountPath': '/bundle', 'readOnly': True}, {'name': 'workspace', 'mountPath': '/workspace'}]}], 'containers': [{'name': 'build', 'image': 'ghcr.io/osscontainertools/kaniko:v1.29.0', 'args': [f'--context=dir:///workspace/{directory}', f'--dockerfile=/workspace/{directory}/Dockerfile', f'--destination={args.registry}/alisa-portal-{component}:{tag}', '--build-arg=API_URL=http://api:8080', '--cache=false', '--compressed-caching=false', '--reproducible'], 'resources': {'requests': {'cpu': '250m', 'memory': '512Mi'}, 'limits': {'cpu': '2', 'memory': '2Gi'}}, 'volumeMounts': [{'name': 'workspace', 'mountPath': '/workspace'}, {'name': 'registry-auth', 'mountPath': '/kaniko/.docker', 'readOnly': True}]}], 'volumes': [{'name': 'bundle', 'configMap': {'name': cm['metadata']['name']}}, {'name': 'workspace', 'emptyDir': {'sizeLimit': '4Gi'}}, {'name': 'registry-auth', 'secret': {'secretName': 'portal-registry-auth', 'items': [{'key': '.dockerconfigjson', 'path': 'config.json'}]}}]}}}}
+    if args.registry_mirror:
+        job['spec']['template']['spec']['containers'][0]['args'] += ['--registry-mirror=' + args.registry_mirror, '--skip-default-registry-fallback']
+    if args.proxy:
+        proxy_env = {'HTTP_PROXY': args.proxy, 'HTTPS_PROXY': args.proxy, 'NO_PROXY': args.registry + ',localhost,127.0.0.1,.svc,.cluster.local'}
+        container = job['spec']['template']['spec']['containers'][0]
+        container['env'] = [{'name': key, 'value': value} for key, value in proxy_env.items()]
+        container['args'] += ['--build-arg=' + key + '=' + value for key, value in proxy_env.items()]
     resources.append(job)
 args.output.mkdir(parents=True, exist_ok=True)
 (args.output / 'build-manifests.json').write_text(json.dumps(resources))

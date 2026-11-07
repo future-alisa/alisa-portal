@@ -47,3 +47,7 @@ backend/data/
 coverage/
 *.tsbuildinfo
 backend/server
+
+# Python tooling cache
+__pycache__/
+*.pyc
