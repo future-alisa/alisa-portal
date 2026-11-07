@@ -1,0 +1,8 @@
+基础设施.md
+**/基础设施*.md
+.git
+.env
+.env.*
+**/node_modules
+**/.next
+backend/data

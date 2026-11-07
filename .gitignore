@@ -31,3 +31,19 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Alisa portal local files
+# Private infrastructure inventory — never commit
+基础设施.md
+**/基础设施*.md
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+backend/data/
+*.log
+.DS_Store
+coverage/
+*.tsbuildinfo
+backend/server

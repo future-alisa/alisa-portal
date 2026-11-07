@@ -1,0 +1,22 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8080
+      DATA_FILE: /data/portal.json
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN in .env}
+    volumes:
+      - portal-data:/data
+    restart: unless-stopped
+  web:
+    build:
+      context: ./frontend
+      args:
+        API_URL: http://api:8080
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+volumes:
+  portal-data:
