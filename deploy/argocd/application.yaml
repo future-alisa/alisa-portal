@@ -24,6 +24,10 @@ spec:
       namespace: alisa-portal
       jsonPointers: [/data]
   syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+      allowEmpty: false
     syncOptions:
       - CreateNamespace=true
       - RespectIgnoreDifferences=true

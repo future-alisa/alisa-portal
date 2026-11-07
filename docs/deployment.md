@@ -6,7 +6,7 @@
 
 - 环境入口：`https://alisa.vip.cpolar.cn/`。
 - 应用名：`alisa-portal`；命名空间：`alisa-portal`。
-- GitOps 路径：`deploy/overlays/production`。
+- GitOps 路径：`deploy/overlays/production`。自动同步及 selfHeal 已启用，自动 prune 关闭。
 - 镜像标签为源码包内容哈希，不使用浮动 latest。
 - 后端数据：`portal-data` PVC，1Gi，使用集群默认 StorageClass。API 单副本并采用 Recreate 更新策略。
 - `portal-auth` 保存管理员 API_TOKEN；`portal-registry-auth` 保存镜像仓库认证。Git 中只有空占位资源，真实值经 Argo CD Resource API 注入 Secret。
@@ -49,6 +49,9 @@ DOCKER_CONFIG=/path/to/private/config CRANE=crane \
 crane 来自 Google 开源 go-containerregistry。凭据配置目录不应位于 Git 中，部署结束后清理临时配置。
 
 ## 根路径 Caddy 转发参考
+
+当前环境的可直接合并片段在本地 `deploy/local/portal.caddy`，该目录因包含环境地址而忽略。将其放入现有站点块内，保留 `/whoami/` 等具体路径规则，再执行 Caddy validate 与 reload。
+
 
 将下面兜底规则加在已有站点的服务路由之后。具体上游地址、SNI 和 CA 路径由服务器管理员从现有配置复用。
 
