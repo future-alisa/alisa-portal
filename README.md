@@ -81,3 +81,7 @@ Go 测试覆盖令牌认证、租户唯一性、部署清单生成、配额校�
 ## Kubernetes / Argo CD
 
 生产清单位于 `deploy/overlays/production`，Application 位于 `deploy/argocd/application.yaml`。私有 Registry 镜像构建、Secret 注入、根域名入口和回滚说明参见 [Argo CD 部署](docs/deployment.md)。
+
+## 内外网与网络管理
+
+服务可配置独立内外网 URL、关联网络区域；门户按入口主机名默认选址，并支持浏览器手动切换。历史公网链接自动兼容。参见 [网络管理与企业方案参考](docs/network-management.md)。

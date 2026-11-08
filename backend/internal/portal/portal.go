@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +22,9 @@ type Service struct {
 	Category    string `json:"category"`
 	Tenant      string `json:"tenant"`
 	URL         string `json:"url"`
+	InternalURL string `json:"internalUrl"`
+	ExternalURL string `json:"externalUrl"`
+	NetworkID   string `json:"networkId"`
 	Status      string `json:"status"`
 	Description string `json:"description"`
 }
@@ -49,10 +51,11 @@ type Event struct {
 	Time    string `json:"time"`
 }
 type State struct {
-	Services    []Service    `json:"services"`
-	Tenants     []Tenant     `json:"tenants"`
-	Deployments []Deployment `json:"deployments"`
-	Events      []Event      `json:"events"`
+	NetworkSettings NetworkSettings `json:"networkSettings"`
+	Services        []Service       `json:"services"`
+	Tenants         []Tenant        `json:"tenants"`
+	Deployments     []Deployment    `json:"deployments"`
+	Events          []Event         `json:"events"`
 }
 type Store struct {
 	mu    sync.Mutex
@@ -68,6 +71,9 @@ func Open(path string) (*Store, error) {
 	data, err := os.ReadFile(path)
 	if err == nil {
 		err = json.Unmarshal(data, &s.state)
+		if err == nil {
+			s.normalize()
+		}
 		return s, err
 	}
 	if !os.IsNotExist(err) {
@@ -75,8 +81,9 @@ func Open(path string) (*Store, error) {
 	}
 	s.state = State{Services: []Service{}, Tenants: []Tenant{{"platform", "平台团队", "platform", 8, 16}}, Deployments: []Deployment{}, Events: []Event{}}
 	for _, v := range []struct{ name, category, desc string }{{"Traefik", "网关", "集群入口与 HTTP 路由"}, {"SeaweedFS", "存储", "对象存储与文件服务"}, {"PostgreSQL", "数据库", "关系型数据存储"}, {"MySQL", "数据库", "业务数据库"}, {"Registry", "镜像仓库", "容器镜像分发"}, {"Argo CD", "部署", "GitOps 持续交付"}, {"Nacos", "配置中心", "服务发现与配置管理"}, {"Gitea", "开发工具", "代码仓库与协作"}} {
-		s.state.Services = append(s.state.Services, Service{id(), v.name, v.category, "platform", "", "unverified", v.desc})
+		s.state.Services = append(s.state.Services, Service{ID: id(), Name: v.name, Category: v.category, Tenant: "platform", Status: "unverified", Description: v.desc})
 	}
+	s.normalize()
 	return s, nil
 }
 func id() string {
@@ -152,19 +159,17 @@ func Handler(s *Store) http.Handler {
 		if !decode(w, r, &v) {
 			return
 		}
-		if strings.TrimSpace(v.Name) == "" || len(v.Name) > 80 || len(v.Description) > 500 || len(v.Category) > 40 {
-			fail(w, 400, "请填写有效服务名称、分类和说明")
+		if err := validateService(&v); err != nil {
+			fail(w, 400, err.Error())
 			return
 		}
-		if v.URL != "" {
-			u, e := url.Parse(v.URL)
-			if e != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
-				fail(w, 400, "服务地址必须是 HTTP(S) 地址且不能包含凭据")
-				return
-			}
-		}
+
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if !s.validNetwork(v.NetworkID) {
+			fail(w, 400, "网络区域不存在")
+			return
+		}
 		if !s.tenant(v.Tenant) {
 			fail(w, 400, "租户不存在")
 			return
@@ -256,6 +261,7 @@ func Handler(s *Store) http.Handler {
 		next.Deployments = append(next.Deployments, v)
 		s.commit(w, next, "生成部署清单 · "+v.Name)
 	})
+	registerNetworkRoutes(mux, s)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
