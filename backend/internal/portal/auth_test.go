@@ -318,3 +318,32 @@ func TestPartialOAuthEnvironmentFailsStartup(t *testing.T) {
 		t.Fatal("partial configuration silently downgraded to legacy auth")
 	}
 }
+
+func TestTenantMemberCanSignInWithoutManagementAccess(t *testing.T) {
+	f := newAuthFixture(t)
+	f.a.config.TenantID = "portal-tenant"
+	f.mu.Lock()
+	f.claims["tenant_id"] = "portal-tenant"
+	f.effect = "DENY"
+	f.mu.Unlock()
+
+	cookie := f.login()
+	w := f.call("GET", "/api/auth/session", cookie, nil)
+	var session struct {
+		Authenticated bool `json:"authenticated"`
+		CanManage     bool `json:"canManage"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &session); err != nil || w.Code != 200 || !session.Authenticated || session.CanManage {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := f.call("GET", "/api/state", cookie, nil); w.Code != 403 {
+		t.Fatal("member accessed management state", w.Code)
+	}
+
+	f.mu.Lock()
+	f.effect = "PERMIT"
+	f.mu.Unlock()
+	if w := f.call("GET", "/api/state", cookie, nil); w.Code != 200 {
+		t.Fatal("newly authorized member could not access management state", w.Code)
+	}
+}

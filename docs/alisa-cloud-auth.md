@@ -4,9 +4,9 @@
 
 ## 权限边界
 
-当前门户是一个基础设施管理实例。`portal:console:manage` 表示管理整个实例，包含全部服务、网络、部署申请、操作记录和本地登记的基础设施租户。**仅授予门户实例管理员**，普通应用用户继续使用公开目录。门户中的基础设施租户不是授权中心的身份租户；本次不把二者自动映射，也不声称提供跨身份租户的数据隔离。
+当前门户是一个基础设施管理实例。`portal:console:manage` 表示管理整个实例，包含全部服务、网络、部署申请、操作记录和本地登记的基础设施租户。**仅授予门户实例管理员**，指定身份租户内的普通成员可以登录门户，使用公开目录。门户的「租户管理」打开 Alisa Admin 的租户界面，「资源配额」保留基础设施命名空间和配额规划。门户中的基础设施租户不是授权中心的身份租户；本次不把二者自动映射，也不声称提供跨身份租户的数据隔离。
 
-每个管理 API 请求实时调用 `/oauth2/introspect`，检查 active、exp、iss、application_id=portal、aud 包含 portal、identity_type=user、userId、tenant_id 和 scope；再以该用户 token 调用 `/api/v1/authorization/check`，要求 applicationId=portal、resourceType=console、resourceId=*、action=manage 返回 `code=200` / `PERMIT`。拒绝其他业务 token、后台应用、错误租户或只有登录而没有权限的用户。网络错误或不确定决策拒绝访问，不缓存允许结果。
+每个管理 API 请求实时调用 `/oauth2/introspect`，检查 active、exp、iss、application_id=portal、aud 包含 portal、identity_type=user、userId、tenant_id 和 scope；再以该用户 token 调用 `/api/v1/authorization/check`，要求 applicationId=portal、resourceType=console、resourceId=*、action=manage 返回 `code=200` / `PERMIT`。拒绝其他业务 token、后台应用、错误租户或只有登录而没有权限的用户访问管理 API。网络错误或不确定决策拒绝访问，不缓存允许结果。
 
 `ALISA_OAUTH_TENANT_ID` 为空时仅接受无身份租户的 token。上游开启多租户后，配置门户所属的唯一身份租户 ID，并使用 tenant 授权提供者；其他身份租户即使存在同名角色也不能进入此门户。没有自动创建角色或给所有用户授权。
 
@@ -31,13 +31,14 @@
 ## 门户服务端配置
 
 ```dotenv
-ALISA_OAUTH_ISSUER=https://alisa.vip.cpolar.cn/auth
+ALISA_OAUTH_ISSUER=https://alisa.vip.cpolar.cn/admin/auth
 ALISA_PORTAL_ORIGIN=https://alisa.vip.cpolar.cn
 ALISA_OAUTH_CLIENT_ID=<保密客户端 ID>
 ALISA_OAUTH_CLIENT_SECRET=<客户端密钥>
 ALISA_OAUTH_RESOURCE_CLIENT_ID=<资源服务器 ID>
 ALISA_OAUTH_RESOURCE_CLIENT_SECRET=<内省密钥>
-ALISA_OAUTH_TENANT_ID=
+ALISA_OAUTH_TENANT_ID=<Alisa Admin 中指定的租户 ID>
+ALISA_OAUTH_PERMISSION_URL=https://alisa.vip.cpolar.cn/admin/api/v1/authorization/check
 ALISA_OAUTH_ALLOW_API_TOKEN=false
 ```
 
@@ -49,7 +50,7 @@ Kubernetes 从既有 `portal-auth` Secret 导入配置（Argo 忽略 /data，不
 
 ## 发布与验收
 
-源码 PR、已验证镜像、发布 PR 和用户评审依次进行；不以修改源码冒充线上已启用。先在测试环境连接真实 Alisa Cloud 验证：允许的管理员登录成功、普通成员/错误租户/错误业务/后台 token 被拒绝、撤权立即生效、Cookie 写操作无 CSRF 被拒绝、注销后原会话不可使用、授权服务中断不影响访客目录。再注入生产配置并发布。
+源码 PR、已验证镜像、发布 PR 和用户评审依次进行；不以修改源码冒充线上已启用。先在测试环境连接真实 Alisa Cloud 验证：允许的管理员登录成功、普通成员可以登录但管理 API 返回 403，错误租户、错误业务和后台 token 被拒绝、撤权立即生效、Cookie 写操作无 CSRF 被拒绝、注销后原会话不可使用、授权服务中断不影响访客目录。再注入生产配置并发布。
 
 本地自动测试使用独立协议测试服务器验证真实 HTTP 授权码交换、PKCE、内省和 PDP 请求，不连接生产数据库。它不能替代真实授权中心、MySQL、反向代理和浏览器 Cookie 联调。
 
