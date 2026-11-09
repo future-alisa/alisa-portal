@@ -1,0 +1,17 @@
+# Import into alisa-user after backing up its DB and installing the schemas
+# documented in alisa-cloud/OAUTH.md. This file is NOT in the production overlay.
+# Merge into existing application catalogs; do not replace other app settings.
+alisa:
+  oauth:
+    enabled: true
+    issuer: ${OAUTH_ISSUER}
+    applications:
+      portal:
+        "[portal:console:manage]": 管理整个门户实例（包括所有登记资源和基础设施租户）
+  authorization:
+    enabled: true
+    applications:
+      # Use tenant instead of local ONLY when upstream tenancy is enabled.
+      # Then portal's ALISA_OAUTH_TENANT_ID must name the owning auth tenant.
+      portal: local
+    administrators: ${AUTHORIZATION_ADMINISTRATORS}
