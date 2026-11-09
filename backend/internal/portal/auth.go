@@ -28,9 +28,11 @@ type OAuthConfig struct {
 type authSession struct {
 	Token, User, CSRF string
 	Expires           time.Time
+	CanManage         bool
 }
 type loginAttempt struct {
 	State, Verifier string
+	Destination     string
 	Expires         time.Time
 }
 type CloudAuth struct {
@@ -210,10 +212,14 @@ func (a *CloudAuth) validate(ctx context.Context, token string) (authSession, in
 	if err = a.send(req, &decision); err != nil {
 		return authSession{}, 503
 	}
-	if decision.Code != 200 || decision.Data.Effect != "PERMIT" {
+	if decision.Code != 200 || (decision.Data.Effect != "PERMIT" && decision.Data.Effect != "DENY") {
 		return authSession{}, 403
 	}
-	return authSession{Token: token, User: claims.User, Expires: time.Unix(claims.Expires, 0)}, 200
+	canManage := decision.Data.Effect == "PERMIT"
+	if !canManage && a.config.TenantID == "" {
+		return authSession{}, 403
+	}
+	return authSession{Token: token, User: claims.User, Expires: time.Unix(claims.Expires, 0), CanManage: canManage}, 200
 }
 func (a *CloudAuth) session(r *http.Request) (authSession, string, bool) {
 	c, err := r.Cookie(a.cookieName("session"))
@@ -262,7 +268,7 @@ func (a *CloudAuth) authorized(w http.ResponseWriter, r *http.Request) bool {
 		fail(w, 401, "无效的访问令牌")
 		return false
 	}
-	_, status := a.validate(r.Context(), token)
+	validated, status := a.validate(r.Context(), token)
 	if status != 200 {
 		if sessionID != "" && status != 503 {
 			a.mu.Lock()
@@ -272,6 +278,10 @@ func (a *CloudAuth) authorized(w http.ResponseWriter, r *http.Request) bool {
 		}
 		messages := map[int]string{401: "登录已失效，请重新登录", 403: "当前账号没有门户管理权限", 503: "授权服务暂不可用，请稍后重试"}
 		fail(w, status, messages[status])
+		return false
+	}
+	if !validated.CanManage {
+		fail(w, 403, "当前账号没有门户管理权限")
 		return false
 	}
 	return true
@@ -288,7 +298,7 @@ func (a *CloudAuth) register(mux *http.ServeMux) {
 			respond(w, 200, map[string]any{"authenticated": false})
 			return
 		}
-		_, status := a.validate(r.Context(), s.Token)
+		validated, status := a.validate(r.Context(), s.Token)
 		if status != 200 {
 			if status == 503 {
 				fail(w, 503, "授权服务暂不可用")
@@ -301,7 +311,7 @@ func (a *CloudAuth) register(mux *http.ServeMux) {
 			respond(w, 200, map[string]any{"authenticated": false, "error": "登录失效或缺少门户管理权限"})
 			return
 		}
-		respond(w, 200, map[string]any{"authenticated": true, "user": s.User, "csrfToken": s.CSRF})
+		respond(w, 200, map[string]any{"authenticated": true, "user": s.User, "csrfToken": s.CSRF, "canManage": validated.CanManage})
 	})
 	mux.HandleFunc("POST /api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 		s, id, ok := a.session(r)
@@ -320,7 +330,11 @@ func (a *CloudAuth) register(mux *http.ServeMux) {
 	})
 }
 func (a *CloudAuth) login(w http.ResponseWriter, r *http.Request) {
-	attempt := loginAttempt{State: randomSecret(), Verifier: randomSecret(), Expires: time.Now().Add(10 * time.Minute)}
+	destination := "/"
+	if r.URL.Query().Get("next") == "admin-services" {
+		destination = "/admin/portal-services"
+	}
+	attempt := loginAttempt{State: randomSecret(), Verifier: randomSecret(), Destination: destination, Expires: time.Now().Add(10 * time.Minute)}
 	id := randomSecret()
 	a.mu.Lock()
 	a.cleanup()
@@ -404,7 +418,7 @@ func (a *CloudAuth) callback(w http.ResponseWriter, r *http.Request) {
 	a.sessions[sha256.Sum256([]byte(id))] = s
 	a.mu.Unlock()
 	a.cookie(w, "session", id, int(time.Until(s.Expires).Seconds()))
-	http.Redirect(w, r, a.config.Origin+"/", http.StatusSeeOther)
+	http.Redirect(w, r, a.config.Origin+attempt.Destination, http.StatusSeeOther)
 }
 func publicAuthPath(r *http.Request) bool {
 	switch r.URL.Path {

@@ -25,8 +25,8 @@ func TestWorkflowPersistenceAndValidation(t *testing.T) {
 		}
 		return w
 	}
-	call("POST", "/api/tenants", `{"name":"研发","namespace":"team-dev","cpu":2,"memory":4}`, 201)
-	call("POST", "/api/tenants", `{"name":"重复","namespace":"team-dev","cpu":2,"memory":4}`, 409)
+	call("POST", "/api/tenants", `{"name":"研发","namespace":"team-dev"}`, 201)
+	call("POST", "/api/tenants", `{"name":"重复","namespace":"team-dev"}`, 409)
 	call("POST", "/api/deployments", `{"name":"test-app","tenant":"missing","image":"nginx:alpine","replicas":1,"port":80}`, 400)
 	w := call("POST", "/api/deployments", `{"name":"test-app","tenant":"platform","image":"nginx:alpine","replicas":2,"port":80}`, 201)
 	var state State
@@ -49,7 +49,7 @@ func TestWorkflowPersistenceAndValidation(t *testing.T) {
 	}
 	call("DELETE", "/api/services/unknown", "", 404)
 }
-func TestAuthAndQuota(t *testing.T) {
+func TestAuthAndLegacyQuotaDoesNotBlockDraft(t *testing.T) {
 	t.Setenv("API_TOKEN", "test-secret")
 	s, _ := Open(filepath.Join(t.TempDir(), "state.json"))
 	h := Handler(s)
@@ -70,7 +70,7 @@ func TestAuthAndQuota(t *testing.T) {
 	req = httptest.NewRequest("POST", "/api/deployments", strings.NewReader(`{"name":"large-app","tenant":"platform","image":"nginx:alpine","replicas":5,"port":80}`))
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, req)
-	if w.Code != 409 {
-		t.Fatal("quota exceeded without rejection")
+	if w.Code != 201 {
+		t.Fatalf("legacy quota blocked draft: %d %s", w.Code, w.Body.String())
 	}
 }

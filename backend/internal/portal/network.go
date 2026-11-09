@@ -128,13 +128,19 @@ func registerNetworkRoutes(mux *http.ServeMux, s *Store) {
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if !s.tenant(v.Tenant) || !s.validNetwork(v.NetworkID) {
-			fail(w, 400, "租户或网络区域不存在")
+		if !s.validNetwork(v.NetworkID) {
+			fail(w, 400, "网络区域不存在")
 			return
 		}
 		next := s.copy()
 		for i, old := range next.Services {
 			if old.ID == r.PathValue("id") {
+				if v.Tenant == "" {
+					v.Tenant = old.Tenant
+				} else if !s.tenant(v.Tenant) {
+					fail(w, 400, "命名空间未登记")
+					return
+				}
 				v.ID = old.ID
 				v.Status = old.Status
 				next.Services[i] = v
