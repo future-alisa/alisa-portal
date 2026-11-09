@@ -15,6 +15,9 @@ export type NetworkSettings = {
     networks: NetworkZone[];
 };
 export type Service = {
+    visibility?: "public" | "private";
+    accessRequirement?: "none" | "account";
+    publicDescription?: string;
     id: string;
     name: string;
     category: string;

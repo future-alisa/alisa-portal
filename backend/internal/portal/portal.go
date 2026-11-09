@@ -17,16 +17,19 @@ import (
 )
 
 type Service struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Category    string `json:"category"`
-	Tenant      string `json:"tenant"`
-	URL         string `json:"url"`
-	InternalURL string `json:"internalUrl"`
-	ExternalURL string `json:"externalUrl"`
-	NetworkID   string `json:"networkId"`
-	Status      string `json:"status"`
-	Description string `json:"description"`
+	Visibility        string `json:"visibility"`
+	AccessRequirement string `json:"accessRequirement"`
+	PublicDescription string `json:"publicDescription"`
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Category          string `json:"category"`
+	Tenant            string `json:"tenant"`
+	URL               string `json:"url"`
+	InternalURL       string `json:"internalUrl"`
+	ExternalURL       string `json:"externalUrl"`
+	NetworkID         string `json:"networkId"`
+	Status            string `json:"status"`
+	Description       string `json:"description"`
 }
 type Tenant struct {
 	ID        string `json:"id"`
@@ -147,6 +150,7 @@ var imagePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_:@-]{0,254}$`)
 
 func Handler(s *Store) http.Handler {
 	mux := http.NewServeMux()
+	registerPublicRoutes(mux, s)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -265,7 +269,7 @@ func Handler(s *Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.URL.Path != "/api/health" {
+		if r.URL.Path != "/api/health" && !(r.Method == http.MethodGet && r.URL.Path == "/api/public/services") {
 			token := os.Getenv("API_TOKEN")
 			if token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
 				fail(w, 401, "需要管理员访问令牌")
