@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Network, Pencil, Activity, ArrowDownToLine, ArrowRight, Box, Boxes, ChevronRight, CircleHelp, ExternalLink, Layers3, LayoutDashboard, Plus, RefreshCw, Rocket, Search, Server, Settings2, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import { type Service, type NetworkSettings, type AccessMode, emptyNetworkSettings, detectAccess, serviceEndpoint } from '../lib/network';
 import { NetworkManager } from '../components/network-manager';
@@ -58,7 +58,10 @@ export default function Home() {
         }[];
     }>({ mode: 'unconfigured', message: '尚未连接 Prometheus', series: [] });
     const [tab, setTab] = useState('工作台'), [state, setState] = useState<State>({ services: [], tenants: [], deployments: [], events: [] }), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [filter, setFilter] = useState('全部分类'), [modal, setModal] = useState(''), [busy, setBusy] = useState(false), [manifest, setManifest] = useState<Deployment | null>(null), [token, setToken] = useState(''), [tokenInput, setTokenInput] = useState(''), [updated, setUpdated] = useState('');
+    const activeToken = useRef(token);
+    activeToken.current = token;
     const request = useCallback(async (path: string, init?: RequestInit) => {
+        if (!token.trim()) throw new Error('请先在连接设置中填写管理员令牌');
         const res = await fetch('/api/' + path, { ...init, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...init?.headers } });
         const data = await res.json();
         if (!res.ok)
@@ -66,25 +69,36 @@ export default function Home() {
         return data;
     }, [token]);
     const refresh = useCallback(async () => {
+        if (!token.trim()) {
+            setState({services:[],tenants:[],deployments:[],events:[]});
+            setMetrics({mode:'unconfigured',message:'请先连接管理账户',series:[]});
+            setManifest(null);setUpdated('');setError('');setLoading(false);return;
+        }
         setLoading(true);
         try {
-            setState(await request('state'));
+            const nextState=await request('state');
+            if(activeToken.current!==token)return;
+            setState(nextState);
             try {
-                setMetrics(await request('metrics'));
+                const nextMetrics=await request('metrics');
+                if(activeToken.current!==token)return;
+                setMetrics(nextMetrics);
             }
             catch {
+                if(activeToken.current!==token)return;
                 setMetrics({ mode: 'error', message: '监控查询失败，请检查 Prometheus 连接', series: [] });
             }
             setError('');
             setUpdated(new Date().toLocaleTimeString('zh-CN'));
         }
         catch (e) {
+            if(activeToken.current!==token)return;
             setError(e instanceof Error ? e.message : '后端暂时不可用');
         }
         finally {
-            setLoading(false);
+            if(activeToken.current===token)setLoading(false);
         }
-    }, [request]);
+    }, [request,token]);
     useEffect(() => { void refresh(); }, [refresh]);
     const submit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -130,7 +144,7 @@ export default function Home() {
  <div className="page-heading"><div><div className="eyebrow">YOUR INFRASTRUCTURE, CONNECTED</div><h1>{tab === '工作台' ? '让基础设施，井然有序。' : tab}</h1><p>{({ '工作台': '在一个工作空间，连接服务、团队与每一次交付。', '服务资源': '统一登记基础设施服务，清晰掌握服务归属与访问入口。', '租户管理': '以命名空间组织团队，规划每个租户的资源配额。', '部署中心': '从容器镜像生成部署清单，交付至你的 GitOps 工作流。', '资源监控': '连接可观测性数据源，了解基础设施的真实运行状况。', '网络管理': '统一管理网络区域、内外网入口与服务访问规则。' } as Record<string, string>)[tab]}</p></div><div className="heading-actions"><button className="button" onClick={() => void refresh()} disabled={loading}><RefreshCw size={16} className={loading ? 'spin' : ''}/>刷新</button><button className="button primary" onClick={() => open(tab === '租户管理' ? 'tenants' : tab === '部署中心' ? 'deployments' : 'services')}><Plus size={17}/>{tab === '租户管理' ? '创建租户' : tab === '部署中心' ? '新建部署' : '登记服务'}</button></div></div>
  {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="关闭错误"><X size={16}/></button></div>}
  <div className="network-access"><div><Network size={17}/><strong>当前优先：{accessLabel}</strong><span>{accessMode === 'auto' ? detected.reason : '手动选择，已保存在此浏览器'}{portalHost ? ' · ' + portalHost : ''}</span></div><label>访问方式<select aria-label="服务访问方式" value={accessMode} onChange={e => changeAccess(e.target.value as AccessMode)}><option value="auto">自动判断</option><option value="external">外网优先</option><option value="internal">内网优先</option></select></label></div>
- <div className="mode-banner"><ShieldCheck size={17}/><span>基础设施目录已就绪</span><span className="muted">· 当前为本地管理模式，服务运行状态需连接集群后核验</span><button onClick={() => open('settings')}>配置连接 <ArrowRight size={15}/></button></div>
+ <div className="mode-banner"><ShieldCheck size={17}/><span>{token ? '管理连接已配置' : '尚未连接管理账户'}</span><span className="muted">{token ? '· 服务运行状态需连接集群后核验' : '· 填写管理员令牌后加载服务与网络数据'}</span><button onClick={() => open('settings')}>配置连接 <ArrowRight size={15}/></button></div>
  {(tab === '工作台' || tab === '资源监控') && <section className="stats">{[{ label: '已登记服务', value: state.services.length, unit: '个', icon: Boxes, note: '统一服务目录', color: 'blue' }, { label: '工作空间租户', value: state.tenants.length, unit: '个', icon: Users, note: '独立命名空间规划', color: 'purple' }, { label: '部署申请', value: state.deployments.length, unit: '项', icon: Rocket, note: '待 GitOps 发布', color: 'orange' }, { label: '集群监控', value: metrics.mode === 'connected' ? '已连接' : '--', unit: '', icon: Activity, note: metrics.mode === 'connected' ? 'Prometheus 实时查询' : '等待连接 Prometheus', color: 'green' }].map(s => <article className="stat" key={s.label}><div className="stat-top">{s.label}<span className={'icon-box ' + s.color}><s.icon size={18}/></span></div><div className="stat-value">{s.value}<span>{s.unit}</span></div><div className="stat-note"><span className={'tiny-dot ' + s.color}/>{s.note}</div></article>)}</section>}
  {(tab === '工作台' || tab === '服务资源') && <><div className="section-heading"><div><h2>服务资源 <span>{state.services.length}</span></h2><p>你的基础设施，从这里连接</p></div>{tab === '工作台' && <button className="text-button" onClick={() => setTab('服务资源')}>查看全部资源 <ArrowRight size={15}/></button>}</div><div className="toolbar"><div className="category-tabs">{['全部分类', '网关', '存储', '数据库', '开发工具'].map(c => <button key={c} onClick={() => setFilter(c)} className={filter === c ? 'selected' : ''}>{c}</button>)}</div><label className="search"><Search size={16}/><input aria-label="搜索服务" placeholder="搜索服务名称、描述…" value={search} onChange={e => setSearch(e.target.value)}/></label></div><section className="service-grid">{services.map((s, i) => <article className="service-card" key={s.id}><div className="service-top"><div className={'service-icon color-' + (i % 5)}>{icons[s.category] || <Box size={23}/>}</div><span className="status"><span />待核验</span></div><h3>{s.name}</h3><p>{s.description || '暂无服务说明'}</p><div className="tags"><span>{s.category || '其他'}</span><span>{tenantName(s.tenant)}</span></div><div className="service-endpoints">{(['internal', 'external'] as const).map(scope => serviceEndpoint(s, scope) ? <a key={scope} href={serviceEndpoint(s, scope)} target="_blank" rel="noreferrer" title={serviceEndpoint(s, scope)}>{scope === 'internal' ? '内网' : '外网'} <ExternalLink size={11}/></a> : <span key={scope}>{scope === 'internal' ? '内网' : '外网'}未配置</span>)}</div><div className="card-footer"><span><Server size={13}/>{networkSettings.networks.find(n => n.id === s.networkId)?.name || '未归类网络'}</span><div>{serviceEndpoint(s, accessScope) ? <a href={serviceEndpoint(s, accessScope)} target="_blank" rel="noreferrer" aria-label={'打开 ' + s.name + '（' + accessLabel + '）'}>打开{accessLabel} <ExternalLink size={13}/></a> : <span className="unconfigured">未配置{accessLabel}入口</span>}<button aria-label={'编辑 ' + s.name} onClick={() => editService(s)}><Pencil size={14}/></button><button aria-label={'移除 ' + s.name} onClick={() => void remove(s)}><Trash2 size={14}/></button></div></div></article>)}</section>{!loading && services.length === 0 && <div className="empty">没有匹配的服务，试试其他搜索条件或登记一个服务。</div>}</>}
  {tab === '网络管理' && <NetworkManager settings={networkSettings} services={state.services} editService={editService} save={async (settings) => { setState(await request('network-settings', { method: 'PUT', body: JSON.stringify(settings) })); }}/>}
@@ -145,7 +159,7 @@ export default function Home() {
                     setModal('');
             }}><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div className="section-heading"><h2 id="dialog-title">{({ services: editingService ? '编辑服务与内外网地址' : '登记服务资源', tenants: '创建租户', deployments: '新建部署申请', settings: '连接设置', help: '使用指南' } as Record<string, string>)[modal]}</h2><button aria-label="关闭" disabled={busy} onClick={() => setModal('')}><X size={20}/></button></div>{error && <div className="error" role="alert">{error}</div>}
  {['services', 'tenants', 'deployments'].includes(modal) && <form key={modal + (editingService?.id || 'new')} onSubmit={submit}>{modal === 'services' && <><label>服务名称<input name="name" defaultValue={editingService?.name} required maxLength={80} placeholder="例如：Redis"/></label><label>资源分类<select name="category" defaultValue={editingService?.category}>{Array.from(new Set(['网关', '存储', '数据库', '镜像仓库', '部署', '配置中心', '开发工具', '其他', ...state.services.map(s => s.category).filter(Boolean)])).map(c => <option key={c}>{c}</option>)}</select></label><label>外网地址（选填）<input name="externalUrl" type="url" defaultValue={editingService?.externalUrl || editingService?.url || ''} maxLength={2048} placeholder="https://your-service.example.com"/></label><label>内网地址（选填）<input name="internalUrl" type="url" defaultValue={editingService?.internalUrl || ''} maxLength={2048} placeholder="https://service.example.local"/></label><label>网络区域<select name="networkId" defaultValue={editingService?.networkId || ''}><option value="">未归类</option>{networkSettings.networks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}</select></label><p className="form-note">外网访问默认打开外网入口，内网访问默认打开内网入口；可手动切换。地址缺失时不会静默跳到另一网络。</p><label>服务说明<textarea name="description" defaultValue={editingService?.description} maxLength={500} placeholder="简要描述服务用途"/></label></>}{modal === 'tenants' && <><label>租户名称<input name="name" required maxLength={80} placeholder="例如：研发团队"/></label><label>命名空间<input name="namespace" required pattern="[a-z][a-z0-9-]{0,61}[a-z0-9]" placeholder="例如：team-dev"/></label><div className="form-row"><label>CPU 配额（核）<input name="cpu" type="number" min={1} max={1000} defaultValue={4} required/></label><label>内存配额（GiB）<input name="memory" type="number" min={1} max={4096} defaultValue={8} required/></label></div><p className="form-note">此操作仅在门户登记租户，不会在集群创建命名空间或 ResourceQuota。</p></>}{modal === 'deployments' && <><label>应用名称<input name="name" required pattern="[a-z][a-z0-9-]{0,61}[a-z0-9]" placeholder="my-application"/></label><label>容器镜像<input name="image" required placeholder="registry.example.com/app:1.0.0"/></label><div className="form-row"><label>副本数<input name="replicas" type="number" min={1} max={20} defaultValue={1} required/></label><label>容器端口<input name="port" type="number" min={1} max={65535} defaultValue={8080} required/></label></div><p className="form-note">生成清单后请审阅并提交 Git 仓库，由 Argo CD 同步。每副本按上限 250m CPU / 256Mi 预留门户配额。</p></>}{modal !== 'tenants' && <label>所属租户<select name="tenant" defaultValue={editingService?.tenant} required>{state.tenants.map(t => <option key={t.id} value={t.id}>{t.name} · {t.namespace}</option>)}</select></label>}<div className="dialog-actions"><button className="button" type="button" disabled={busy} onClick={() => setModal('')}>取消</button><button className="button primary" disabled={busy}>{busy ? '保存中…' : modal === 'deployments' ? '生成部署清单' : '保存'}</button></div></form>}
- {modal === 'settings' && <><p className="muted">前端通过 Next.js 同源代理连接 Go API。服务端 API_URL 默认指向本地 8080 端口。</p><label>管理员 API 令牌<input type="password" autoComplete="off" value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="与后端 API_TOKEN 保持一致"/></label><p className="form-note">令牌仅保存在当前页面内存中，刷新页面后需重新输入。Prometheus 在 Go 服务端通过 PROMETHEUS_URL 配置；集群和 Argo CD 连接器尚未实现。</p><button className="button primary" onClick={() => { setToken(tokenInput); setTokenInput(''); setModal(''); }}>应用连接设置</button></>}
+ {modal === 'settings' && <><p className="muted">前端通过 Next.js 同源代理连接 Go API。服务端 API_URL 默认指向本地 8080 端口。</p><label>管理员 API 令牌<input type="password" autoComplete="off" value={tokenInput} onChange={e => setTokenInput(e.target.value)} placeholder="与后端 API_TOKEN 保持一致"/></label><p className="form-note">令牌仅保存在当前页面内存中，刷新页面后需重新输入。Prometheus 在 Go 服务端通过 PROMETHEUS_URL 配置；集群和 Argo CD 连接器尚未实现。</p><button className="button primary" onClick={() => { setToken(tokenInput.trim()); setTokenInput(''); setModal(''); }}>应用连接设置</button></>}
  {modal === 'help' && <div className="help"><p>1. 在服务资源中登记服务地址，按团队归属管理基础设施。</p><p>2. 在租户管理中规划命名空间和配额。</p><p>3. 在部署中心填写容器镜像，下载并审阅 Kubernetes 清单。</p><p>4. 将清单提交到 GitOps 仓库，由 Argo CD 进行实际部署。</p><p>服务状态均为待核验。Prometheus 需配置数据源，OIDC 登录和集群操作需要后续接入，详细说明见项目 README。</p></div>}</section></div>}
  {manifest && <div className="overlay"><section className="dialog wide" role="dialog" aria-modal="true" aria-label="部署清单"><div className="section-heading"><h2>{manifest.name} · Kubernetes 清单</h2><button aria-label="关闭清单" onClick={() => setManifest(null)}><X size={20}/></button></div><pre>{manifest.manifest}</pre><button className="button primary" onClick={() => download(manifest)}><ArrowDownToLine size={16}/>下载 YAML</button></section></div>}
  </div>;
