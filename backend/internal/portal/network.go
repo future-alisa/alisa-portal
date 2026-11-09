@@ -25,6 +25,7 @@ type NetworkSettings struct {
 }
 
 func (s *Store) normalize() {
+	s.initializeVisitorResources()
 	for i := range s.state.Services {
 		v := &s.state.Services[i]
 		if v.Visibility == "" {

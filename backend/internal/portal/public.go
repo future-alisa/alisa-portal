@@ -62,3 +62,43 @@ func registerPublicRoutes(mux *http.ServeMux, s *Store) {
 		respond(w, 200, map[string]any{"services": result})
 	})
 }
+
+// Apply the explicitly approved public entries once. Persisting the version with
+// state ensures later administrator edits and withdrawals survive restarts.
+func (s *Store) initializeVisitorResources() {
+	if s.state.CatalogVersion >= 1 {
+		return
+	}
+	for _, entry := range []struct{ name, category, url, description string }{
+		{"Alisa Docs", "文档", "https://alisa.vip.cpolar.cn/docs/", "Alisa 的项目文档与使用指南。"},
+		{"Alisa Blog", "博客", "https://blog.alisacloud.com", "Alisa 的博客与技术文章。"},
+	} {
+		found := false
+		for i := range s.state.Services {
+			v := &s.state.Services[i]
+			raw := v.ExternalURL
+			if raw == "" {
+				raw = v.URL
+			}
+			if strings.TrimRight(raw, "/") != strings.TrimRight(entry.url, "/") {
+				continue
+			}
+			found = true
+			// Respect any previously explicit administrator visibility choice.
+			if v.Visibility == "" {
+				v.Visibility = "public"
+				v.AccessRequirement = "none"
+				v.PublicDescription = entry.description
+			}
+			break
+		}
+		if !found {
+			tenant := ""
+			if len(s.state.Tenants) > 0 {
+				tenant = s.state.Tenants[0].ID
+			}
+			s.state.Services = append(s.state.Services, Service{ID: id(), Name: entry.name, Category: entry.category, Tenant: tenant, URL: entry.url, ExternalURL: entry.url, Visibility: "public", AccessRequirement: "none", PublicDescription: entry.description, Status: "unverified"})
+		}
+	}
+	s.state.CatalogVersion = 1
+}

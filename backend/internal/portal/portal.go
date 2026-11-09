@@ -54,6 +54,7 @@ type Event struct {
 	Time    string `json:"time"`
 }
 type State struct {
+	CatalogVersion  int             `json:"catalogVersion"`
 	NetworkSettings NetworkSettings `json:"networkSettings"`
 	Services        []Service       `json:"services"`
 	Tenants         []Tenant        `json:"tenants"`

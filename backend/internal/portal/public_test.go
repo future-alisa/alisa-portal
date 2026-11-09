@@ -117,3 +117,31 @@ func TestPublishAndWithdrawPersists(t *testing.T) {
 		t.Fatal("withdrawn resource remains public")
 	}
 }
+
+func TestApprovedVisitorResourcesMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	s := &Store{path: path, state: State{Services: []Service{{ID: "docs-stable", Name: "Alisa Docs", ExternalURL: "https://alisa.vip.cpolar.cn/docs/", InternalURL: "http://docs.local", Description: "internal notes"}}, Tenants: []Tenant{{ID: "platform"}}}}
+	s.normalize()
+	if len(s.state.Services) != 2 {
+		t.Fatal("expected existing docs and one new blog")
+	}
+	docs := s.state.Services[0]
+	if docs.ID != "docs-stable" || docs.InternalURL != "http://docs.local" || docs.Description != "internal notes" || docs.Visibility != "public" || docs.AccessRequirement != "none" {
+		t.Fatal(docs)
+	}
+	if s.state.Services[1].ExternalURL != "https://blog.alisacloud.com" {
+		t.Fatal("blog missing")
+	}
+	s.state.Services[0].Visibility = "private"
+	s.state.Services = s.state.Services[:1] // Administrators may also remove the approved entry.
+	if err := s.save(s.state); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.state.Services) != 1 || loaded.state.Services[0].Visibility != "private" {
+		t.Fatal("migration overrode administrator edits")
+	}
+}
