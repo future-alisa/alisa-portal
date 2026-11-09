@@ -40,3 +40,7 @@ git switch -c feature/your-feature
 ## 私有信息
 
 禁止提交基础设施私有原文、.env、kubeconfig、认证头、Registry/Argo CD 凭据、生产数据、备份和包含环境信息的临时构建文件。生产管理员令牌仅在受控环境中使用，不写入 PR、CI 输出或构建产物。
+
+## 公开服务目录
+
+未登录页面仅请求 `GET /api/public/services`，不请求管理状态或监控接口。服务新增 `visibility`（`private` / `public`）、`accessRequirement`（`none` / `account`）和独立 `publicDescription` 字段。除明确批准的 Alisa Docs（`https://alisa.vip.cpolar.cn/docs/`）和 Alisa Blog（`https://blog.alisacloud.com`）外，已有资源默认仅管理员可见。首次迁移按完整外网 URL 匹配 Docs 并保留其 ID、内网地址和内部说明；博客不存在时新增。迁移版本随状态持久化，后续管理员撤回公开、修改或删除不会被重新覆盖。已有明确设置的公开范围优先。管理员编辑服务时可逐项公开应用网站，并标注是否需要目标服务账号；公开目录只返回名称、分类、公开说明、外网链接及访问要求。内部说明、内网入口、租户、网络、部署和事件不进入公开响应。公开资源必须配置外网地址。该标注不改变应用本身的认证和授权。

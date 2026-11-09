@@ -25,8 +25,15 @@ type NetworkSettings struct {
 }
 
 func (s *Store) normalize() {
+	s.initializeVisitorResources()
 	for i := range s.state.Services {
 		v := &s.state.Services[i]
+		if v.Visibility == "" {
+			v.Visibility = "private"
+		}
+		if v.AccessRequirement == "" {
+			v.AccessRequirement = "account"
+		}
 		if v.ExternalURL == "" {
 			v.ExternalURL = v.URL
 		}
@@ -64,6 +71,9 @@ func validateService(v *Service) error {
 	}
 	if v.ExternalURL == "" && v.URL != "" {
 		v.ExternalURL = v.URL
+	}
+	if err := validatePublication(v); err != nil {
+		return err
 	}
 	v.URL = v.ExternalURL // Compatibility for older clients; internal endpoints never masquerade as public URLs.
 	return nil
