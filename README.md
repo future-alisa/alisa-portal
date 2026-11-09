@@ -58,7 +58,7 @@ Go 测试覆盖令牌认证、租户唯一性、部署清单生成、配额校�
 
 ## API
 
-除健康检查外，若设置 `API_TOKEN`，需携带 `Authorization: Bearer <token>`。
+公开目录、健康检查和登录状态接口无需认证。未启用统一登录时，管理 API 使用 `Authorization: Bearer <API_TOKEN>`；接入 Alisa Cloud 后由服务端会话或经内省和权限判断的 OAuth token 保护。详见 [统一授权接入](docs/alisa-cloud-auth.md)。
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
@@ -85,3 +85,5 @@ Go 测试覆盖令牌认证、租户唯一性、部署清单生成、配额校�
 ## 内外网与网络管理
 
 服务可配置独立内外网 URL、关联网络区域；门户按入口主机名默认选址，并支持浏览器手动切换。历史公网链接自动兼容。参见 [网络管理与企业方案参考](docs/network-management.md)。
+
+统一账号接入、所需上游配置和权限边界见 [Alisa Cloud 统一授权接入](docs/alisa-cloud-auth.md)。

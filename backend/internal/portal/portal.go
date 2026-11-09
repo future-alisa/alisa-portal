@@ -149,9 +149,18 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 var dns = regexp.MustCompile(`^[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
 var imagePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9./_:@-]{0,254}$`)
 
-func Handler(s *Store) http.Handler {
+func Handler(s *Store) http.Handler { return HandlerWithAuth(s, nil) }
+func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 	mux := http.NewServeMux()
 	registerPublicRoutes(mux, s)
+	if auth != nil {
+		auth.register(mux)
+	} else {
+		mux.HandleFunc("GET /api/auth/config", func(w http.ResponseWriter, r *http.Request) {
+			respond(w, 200, map[string]any{"enabled": false, "allowApiToken": true})
+		})
+		mux.HandleFunc("GET /api/auth/session", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]bool{"authenticated": false}) })
+	}
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -270,7 +279,14 @@ func Handler(s *Store) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.URL.Path != "/api/health" && !(r.Method == http.MethodGet && r.URL.Path == "/api/public/services") {
+		if r.URL.Path != "/api/health" && !(r.Method == http.MethodGet && r.URL.Path == "/api/public/services") && !publicAuthPath(r) {
+			if auth != nil {
+				if !auth.authorized(w, r) {
+					return
+				}
+				mux.ServeHTTP(w, r)
+				return
+			}
 			token := os.Getenv("API_TOKEN")
 			if token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {
 				fail(w, 401, "需要管理员访问令牌")
