@@ -184,8 +184,11 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 			fail(w, 400, "网络区域不存在")
 			return
 		}
+		if v.Tenant == "" {
+			v.Tenant = "platform"
+		}
 		if !s.tenant(v.Tenant) {
-			fail(w, 400, "租户不存在")
+			fail(w, 400, "命名空间未登记")
 			return
 		}
 		v.ID = id()
@@ -212,8 +215,8 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 		if !decode(w, r, &v) {
 			return
 		}
-		if strings.TrimSpace(v.Name) == "" || len(v.Name) > 80 || !dns.MatchString(v.Namespace) || v.CPU < 1 || v.CPU > 1000 || v.Memory < 1 || v.Memory > 4096 {
-			fail(w, 400, "名称不能为空，命名空间需为 2–63 位小写 DNS 名称，配额必须在有效范围内")
+		if strings.TrimSpace(v.Name) == "" || len(v.Name) > 80 || !dns.MatchString(v.Namespace) {
+			fail(w, 400, "名称不能为空，命名空间需为 2–63 位小写 DNS 名称")
 			return
 		}
 		s.mu.Lock()
@@ -227,7 +230,7 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 		v.ID = id()
 		next := s.copy()
 		next.Tenants = append(next.Tenants, v)
-		s.commit(w, next, "创建租户 · "+v.Name)
+		s.commit(w, next, "登记命名空间 · "+v.Name)
 	})
 	mux.HandleFunc("POST /api/deployments", func(w http.ResponseWriter, r *http.Request) {
 		var v Deployment
@@ -247,25 +250,14 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 			}
 		}
 		if tenant.ID == "" {
-			fail(w, 400, "租户不存在")
+			fail(w, 400, "命名空间未登记")
 			return
 		}
 		for _, d := range s.state.Deployments {
 			if d.Name == v.Name && d.Tenant == v.Tenant {
-				fail(w, 409, "该租户已存在同名部署申请")
+				fail(w, 409, "该命名空间已存在同名部署申请")
 				return
 			}
-		}
-		cpu, memory := v.Replicas*250, v.Replicas*256
-		for _, d := range s.state.Deployments {
-			if d.Tenant == v.Tenant {
-				cpu += d.Replicas * 250
-				memory += d.Replicas * 256
-			}
-		}
-		if cpu > tenant.CPU*1000 || memory > tenant.Memory*1024 {
-			fail(w, 409, "部署申请超过租户预留配额")
-			return
 		}
 		v.ID = id()
 		v.Created = time.Now().UTC().Format(time.RFC3339)

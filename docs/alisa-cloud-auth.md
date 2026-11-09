@@ -4,7 +4,7 @@
 
 ## 权限边界
 
-当前门户是一个基础设施管理实例。`portal:console:manage` 表示管理整个实例，包含全部服务、网络、部署申请、操作记录和本地登记的基础设施租户。**仅授予门户实例管理员**，指定身份租户内的普通成员可以登录门户，使用公开目录。管理员从「服务资源」打开 Alisa Admin 管理租户，「资源配额」保留基础设施命名空间和配额规划。门户中的基础设施租户不是授权中心的身份租户；本次不把二者自动映射，也不声称提供跨身份租户的数据隔离。
+当前门户是一个基础设施管理实例。`portal:console:manage` 表示管理整个实例，包含全部服务、网络、部署申请、操作记录和门户登记的部署命名空间。**仅授予门户实例管理员**，指定身份租户内的普通成员可以登录门户，使用公开目录。管理员从「服务资源」打开 Alisa Admin 管理租户，服务目录和网络设置也在 Alisa Admin 维护。门户中的基础设施租户不是授权中心的身份租户；本次不把二者自动映射，也不声称提供跨身份租户的数据隔离。
 
 每个管理 API 请求实时调用 `/oauth2/introspect`，检查 active、exp、iss、application_id=portal、aud 包含 portal、identity_type=user、userId、tenant_id 和 scope；再以该用户 token 调用 `/api/v1/authorization/check`，要求 applicationId=portal、resourceType=console、resourceId=*、action=manage 返回 `code=200` / `PERMIT`。拒绝其他业务 token、后台应用、错误租户或只有登录而没有权限的用户访问管理 API。网络错误或不确定决策拒绝访问，不缓存允许结果。
 

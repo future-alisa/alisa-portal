@@ -32,6 +32,7 @@ type authSession struct {
 }
 type loginAttempt struct {
 	State, Verifier string
+	Destination     string
 	Expires         time.Time
 }
 type CloudAuth struct {
@@ -329,7 +330,11 @@ func (a *CloudAuth) register(mux *http.ServeMux) {
 	})
 }
 func (a *CloudAuth) login(w http.ResponseWriter, r *http.Request) {
-	attempt := loginAttempt{State: randomSecret(), Verifier: randomSecret(), Expires: time.Now().Add(10 * time.Minute)}
+	destination := "/"
+	if r.URL.Query().Get("next") == "admin-services" {
+		destination = "/admin/portal-services"
+	}
+	attempt := loginAttempt{State: randomSecret(), Verifier: randomSecret(), Destination: destination, Expires: time.Now().Add(10 * time.Minute)}
 	id := randomSecret()
 	a.mu.Lock()
 	a.cleanup()
@@ -413,7 +418,7 @@ func (a *CloudAuth) callback(w http.ResponseWriter, r *http.Request) {
 	a.sessions[sha256.Sum256([]byte(id))] = s
 	a.mu.Unlock()
 	a.cookie(w, "session", id, int(time.Until(s.Expires).Seconds()))
-	http.Redirect(w, r, a.config.Origin+"/", http.StatusSeeOther)
+	http.Redirect(w, r, a.config.Origin+attempt.Destination, http.StatusSeeOther)
 }
 func publicAuthPath(r *http.Request) bool {
 	switch r.URL.Path {

@@ -6,7 +6,7 @@
 - 后端：Go 1.24 标准库路由与 JSON API，明确的服务/租户/部署领域模型。MVP 使用本地 JSON 持久化，不引入不必要的运行依赖。
 - 当前统一登录：[Alisa Cloud OAuth + PKCE](alisa-cloud-auth.md)，服务端会话及实时内省 / 权限判断，仅显式授予门户实例管理权限的用户进入完整控制台。
 - 后续演进：PostgreSQL + sqlc/pgx 作为事实数据源，OIDC（Keycloak / 现有身份提供商）+ 服务端会话，RBAC 授权、租户访问过滤和数据库审计记录。
-- 集群接入：后续使用 client-go、限定命名空间的 ServiceAccount；租户映射 Namespace、ResourceQuota、LimitRange、NetworkPolicy。门户配额当前只校验本地部署申请，不能代表实际集群用量。
+- 集群接入：后续使用 client-go、限定命名空间的 ServiceAccount；租户映射 Namespace、ResourceQuota、LimitRange、NetworkPolicy。
 - 交付：当前仅输出 Deployment/Service YAML。后续对接 Git 仓库提交审批，经 Argo CD 同步，不将高权限 kubeconfig 暴露给浏览器。
 - 可观测性：已通过 Go 端查询固定 PromQL，配置 PROMETHEUS_URL 后可用；Grafana 提供仪表盘，Loki 提供日志，Alertmanager 提供告警。Grafana、Loki 与 Alertmanager 连接器尚未实现。
 
