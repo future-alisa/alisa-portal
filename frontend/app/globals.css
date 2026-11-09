@@ -16,3 +16,5 @@
 
 .profile > div:last-child { min-width: 0; }
 .profile strong, .profile small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.session-loading { min-height: 100dvh; display: grid; place-items: center; }
