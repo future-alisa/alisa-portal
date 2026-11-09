@@ -54,3 +54,29 @@ Kubernetes 从既有 `portal-auth` Secret 导入配置（Argo 忽略 /data，不
 本地自动测试使用独立协议测试服务器验证真实 HTTP 授权码交换、PKCE、内省和 PDP 请求，不连接生产数据库。它不能替代真实授权中心、MySQL、反向代理和浏览器 Cookie 联调。
 
 配套 alisa-cloud 分支 `feature/portal-oauth` 提供 `/auth/` HTTPRoute、受信任前缀处理、路径前缀页面修复及默认关闭的 scope 配置；见该仓库 `PORTAL_AUTH.md`。创建账号与授予门户权限是独立步骤，账号创建不表示 OAuth 已启用。
+
+## 本地连接真实 alisa-user（无需模拟服务）
+
+本地联调用真实 Spring Authorization Server、MyBatis 和授权引擎，数据库是只绑定本机的独立 H2 文件库。不会使用或修改线上 MySQL。`deploy/local/alisa-account.json` 保存用户明确创建的 alisa 账号凭据；启动时仅在全新本地库中建立同名开发账号，不在重启时重置密码或已有数据。凭据、H2 文件、客户端密钥、JWT 签名密钥均在 Git 忽略的 `deploy/local` 下，目录 0700 / 私密文件 0600。
+
+先在包含配套修改的 alisa-cloud 工作树运行 `mvn -pl alisa-user -am test`，然后在门户仓库打开独立终端：
+
+```sh
+# 终端 1：真实用户服务，按实际工作树路径填写
+python3 scripts/run-alisa-cloud-local.py --cloud-root ../alisa-cloud
+# 服务固定监听 http://127.0.0.1:9091
+
+# 首次启动后：通过真实接口登记本地门户角色、保密客户端与内省客户端
+python3 scripts/configure-alisa-cloud-local.py
+
+# 终端 2：Go 门户 API，自动读取本地私有配置
+python3 scripts/run-api-local.py
+# 终端 3：Next.js
+cd frontend && npm run dev
+```
+
+打开 `http://127.0.0.1:3000`，点击登录后将到 `http://127.0.0.1:9091/login` 输入 alisa 账号密码。身份验证、同意记录、PKCE code/token、内省及权限判断均由真实 alisa-user 处理。已同意的范围可以由授权中心复用，不保证每次都重复显示确认页。当前授权中心使用单独的本地签名密钥和持久化库，属于真实代码的本地实例，不是生产授权服务已经启用。
+
+验证命令 `python3 scripts/check-alisa-cloud-local.py` 会完成真实 HTTP 登录/同意/回调/管理请求/注销，并临时撤销、恢复**本地** portal-admin 的 alisa 绑定，确认只有登录而没有业务权限时不能进入门户。脚本固定请求 loopback 地址，不用于生产。运行时不要同时手动修改这个本地测试角色。
+
+协议参考：[PKCE RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)、[Token Introspection RFC 7662](https://www.rfc-editor.org/rfc/rfc7662)。这次联调验证了相关流程，不等同于完整 OAuth 安全审计或 OIDC 认证。
