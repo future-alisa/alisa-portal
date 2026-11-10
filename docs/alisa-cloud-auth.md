@@ -78,6 +78,8 @@ cd frontend && npm run dev
 
 打开 `http://127.0.0.1:3000`，点击登录后将到 `http://127.0.0.1:9091/login` 输入 alisa 账号密码。身份验证、同意记录、PKCE code/token、内省及权限判断均由真实 alisa-user 处理。已同意的范围可以由授权中心复用，不保证每次都重复显示确认页。当前授权中心使用单独的本地签名密钥和持久化库，属于真实代码的本地实例，不是生产授权服务已经启用。
 
+本地授权服务正常停止时会把登录会话保存到私有的 `deploy/local/real-auth/sessions`，使未过期的登录表单在授权服务重启后仍可继续使用。如果表单或门户登录请求已过期，请从门户首页重新发起登录。
+
 验证命令 `python3 scripts/check-alisa-cloud-local.py` 会完成真实 HTTP 登录/同意/回调/管理请求/注销，并临时撤销、恢复**本地** portal-admin 的 alisa 绑定，确认只有登录而没有业务权限时不能进入门户。脚本固定请求 loopback 地址，不用于生产。运行时不要同时手动修改这个本地测试角色。
 
 协议参考：[PKCE RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)、[Token Introspection RFC 7662](https://www.rfc-editor.org/rfc/rfc7662)。这次联调验证了相关流程，不等同于完整 OAuth 安全审计或 OIDC 认证。
