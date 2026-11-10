@@ -47,23 +47,27 @@ export default function Home() {
     const [authConfig,setAuthConfig]=useState<{enabled:boolean;allowApiToken:boolean}|null>(null);
     const [authError,setAuthError]=useState('');
     const [checkingSession, setCheckingSession] = useState(true);
+    const [sessionCheckError, setSessionCheckError] = useState('');
+    const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
     const credential=token || (cloudSession?.canManage ? cloudSession.csrfToken : '');
     const activeToken=useRef(credential);activeToken.current=credential;
     useEffect(()=>{
         const abort=new AbortController();
         const timeout = window.setTimeout(() => {
             abort.abort();
-            setAuthError('确认登录状态超时，请刷新重试。');
+            setSessionCheckError('确认登录状态超时。');
             setCheckingSession(false);
         }, 8000);
         const callbackError=new URL(window.location.href).searchParams.get('auth_error');
         const messages:Record<string,string>={forbidden:'当前账号无法登录门户，请确认你属于门户租户。',cancelled:'你已取消统一账号授权。',unavailable:'统一账号服务暂不可用，请稍后重试。'};
         if(callbackError){setAuthError(messages[callbackError]||'统一账号登录未完成。');const u=new URL(window.location.href);u.searchParams.delete('auth_error');window.history.replaceState(null,'',u.pathname+u.search+u.hash);}
         void Promise.all([fetch('/api/auth/config',{signal:abort.signal,cache:'no-store'}),fetch('/api/auth/session',{signal:abort.signal,cache:'no-store'})]).then(async([config,session])=>{
-            if(!config.ok||!session.ok)throw new Error('无法确认统一账号状态，请刷新重试。');
+            if(!config.ok||!session.ok)throw new Error('无法确认统一账号状态。');
             const c=await config.json();const data=await session.json();if(abort.signal.aborted)return;
             setAuthConfig(c);if(data.authenticated)setCloudSession({csrfToken:data.csrfToken,canManage:data.canManage===true});if(data.error)setAuthError(data.error);
-        }).catch(e=>{if(!abort.signal.aborted)setAuthError(e.message);}).finally(() => {
+        }).catch(() => {
+            if (!abort.signal.aborted) setSessionCheckError('暂时无法确认登录状态。');
+        }).finally(() => {
             window.clearTimeout(timeout);
             if (!abort.signal.aborted) setCheckingSession(false);
         });
@@ -71,7 +75,7 @@ export default function Home() {
             window.clearTimeout(timeout);
             abort.abort();
         };
-    },[]);
+    },[sessionCheckAttempt]);
     const logout=async()=>{
         try {if(cloudSession){const r=await fetch('/api/auth/logout',{method:'POST',headers:{'X-CSRF-Token':cloudSession.csrfToken}});if(!r.ok)throw new Error('退出失败，请稍后重试');}}
         catch(e){setError(e instanceof Error?e.message:'退出失败');return;}
@@ -127,6 +131,11 @@ export default function Home() {
     const accessScope = accessMode === 'auto' ? detected.scope : accessMode;
     const accessLabel = accessScope === 'internal' ? '内网' : '外网';
     if (checkingSession) return <main className="session-loading"><div className="login-loading" role="status"><RefreshCw size={16} className="spin" aria-hidden="true"/>正在确认登录状态…</div></main>;
+    if (sessionCheckError) return <main className="session-loading"><div className="login-loading"><span role="alert">{sessionCheckError}</span><button className="button" onClick={() => {
+        setSessionCheckError('');
+        setCheckingSession(true);
+        setSessionCheckAttempt(attempt => attempt + 1);
+    }}>重试</button></div></main>;
     if (!credential) return <PublicCatalog signedIn={cloudSession !== null} logout={() => void logout()} authConfig={authConfig} authError={authError || error} connect={value => { setState({services:[],tenants:[],events:[]}); setTab("工作台"); setToken(value); }}/>;
     return <div className="shell"><aside><a className="brand" href="/"><span className="brand-icon"><Layers3 size={24}/></span>alisa<span className="brand-dot">.</span></a><div className="workspace"><div className="avatar">A</div><div><strong>Alisa Workspace</strong><small>个人云 · 工作空间</small></div><ChevronRight size={15}/></div><div className="nav-caption">WORKSPACE</div><nav>{navigation.map(n => <button key={n.label} className={tab === n.label ? 'active' : ''} onClick={() => { setTab(n.label); setSearch(''); }}><n.icon size={19}/>{n.label}{n.label === '服务资源' && <span className="count">{state.services.length}</span>}</button>)}</nav><div className="aside-bottom"><div className="cluster-note"><span className="pulse"/> 本地管理模式<small>集群连接尚未配置</small></div><button onClick={() => void logout()}>退出管理</button><button onClick={() => open('settings')}><Settings2 size={18}/>连接设置</button><button onClick={() => open('help')}><CircleHelp size={18}/>使用指南</button><div className="profile"><div className="avatar dark">A</div><div><strong>{cloudSession ? '门户管理员' : 'Administrator'}</strong><small>{cloudSession ? 'Alisa 统一账号' : '管理员令牌连接'}</small></div></div></div></aside>
  <div className="main"><header><div className="breadcrumb">工作空间 <ChevronRight size={14}/><span>{tab}</span></div><div className="header-right"><span className="environment">{accessLabel}</span><span className="header-line"/><ShieldCheck size={17}/><span>管理控制台</span><div className="avatar small">A</div></div></header><main>
