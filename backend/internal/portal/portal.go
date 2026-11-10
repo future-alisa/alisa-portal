@@ -168,7 +168,7 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 		respond(w, 200, s.state)
 	})
 	mux.HandleFunc("GET /api/metrics", metrics)
-	mux.HandleFunc("POST /api/services", func(w http.ResponseWriter, r *http.Request) {
+	registerResourceWrite(mux, auth, "POST /api/services", "service", "create", func(w http.ResponseWriter, r *http.Request) {
 		var v Service
 		if !decode(w, r, &v) {
 			return
@@ -195,22 +195,22 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 		v.Status = "unverified"
 		next := s.copy()
 		next.Services = append(next.Services, v)
-		s.commit(w, next, "登记服务 · "+v.Name)
+		s.commit(w, r, next, v, "登记服务 · "+v.Name)
 	})
-	mux.HandleFunc("DELETE /api/services/{id}", func(w http.ResponseWriter, r *http.Request) {
+	registerResourceWrite(mux, auth, "DELETE /api/services/{id}", "service", "delete", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		next := s.copy()
 		for i, v := range next.Services {
 			if v.ID == r.PathValue("id") {
 				next.Services = append(next.Services[:i], next.Services[i+1:]...)
-				s.commit(w, next, "移除服务 · "+v.Name)
+				s.commit(w, r, next, nil, "移除服务 · "+v.Name)
 				return
 			}
 		}
 		fail(w, 404, "服务不存在")
 	})
-	mux.HandleFunc("POST /api/tenants", func(w http.ResponseWriter, r *http.Request) {
+	registerResourceWrite(mux, auth, "POST /api/tenants", "tenant", "create", func(w http.ResponseWriter, r *http.Request) {
 		var v Tenant
 		if !decode(w, r, &v) {
 			return
@@ -230,9 +230,9 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 		v.ID = id()
 		next := s.copy()
 		next.Tenants = append(next.Tenants, v)
-		s.commit(w, next, "登记命名空间 · "+v.Name)
+		s.commit(w, r, next, v, "登记命名空间 · "+v.Name)
 	})
-	mux.HandleFunc("POST /api/deployments", func(w http.ResponseWriter, r *http.Request) {
+	registerResourceWrite(mux, auth, "POST /api/deployments", "deployment", "create", func(w http.ResponseWriter, r *http.Request) {
 		var v Deployment
 		if !decode(w, r, &v) {
 			return
@@ -265,13 +265,14 @@ func HandlerWithAuth(s *Store, auth *CloudAuth) http.Handler {
 		v.Manifest = manifest(v, tenant)
 		next := s.copy()
 		next.Deployments = append(next.Deployments, v)
-		s.commit(w, next, "生成部署清单 · "+v.Name)
+		s.commit(w, r, next, v, "生成部署清单 · "+v.Name)
 	})
-	registerNetworkRoutes(mux, s)
+	registerNetworkRoutes(mux, s, auth)
+	registerResourceReads(mux, s, auth)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.URL.Path != "/api/health" && !(r.Method == http.MethodGet && r.URL.Path == "/api/public/services") && !publicAuthPath(r) {
+		if !strings.HasPrefix(r.URL.Path, "/api/oauth/") && r.URL.Path != "/api/health" && !(r.Method == http.MethodGet && r.URL.Path == "/api/public/services") && !publicAuthPath(r) {
 			if auth != nil {
 				if !auth.authorized(w, r) {
 					return
@@ -302,13 +303,23 @@ func (s *Store) copy() State {
 	_ = json.Unmarshal(data, &next)
 	return next
 }
-func (s *Store) commit(w http.ResponseWriter, next State, msg string) {
+func (s *Store) commit(w http.ResponseWriter, r *http.Request, next State, resource any, msg string) {
 	next.Events = append([]Event{{msg, time.Now().UTC().Format(time.RFC3339)}}, next.Events...)
 	if len(next.Events) > 100 {
 		next.Events = next.Events[:100]
 	}
 	if err := s.save(next); err != nil {
 		fail(w, 500, "保存失败，请检查数据目录权限")
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/oauth/") {
+		if resource == nil {
+			w.WriteHeader(http.StatusNoContent)
+		} else if r.Method == http.MethodPost {
+			respond(w, http.StatusCreated, resource)
+		} else {
+			respond(w, http.StatusOK, resource)
+		}
 		return
 	}
 	respond(w, 201, next)

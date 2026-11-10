@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -140,6 +141,13 @@ func (a *CloudAuth) exchange(ctx context.Context, endpoint string, form url.Valu
 	}
 	return a.send(req, out)
 }
+
+type upstreamStatus int
+
+func (status upstreamStatus) Error() string {
+	return fmt.Sprintf("authorization service returned %d", status)
+}
+
 func (a *CloudAuth) send(req *http.Request, out any) error {
 	res, err := a.client.Do(req)
 	if err != nil {
@@ -147,30 +155,34 @@ func (a *CloudAuth) send(req *http.Request, out any) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("authorization service returned %d", res.StatusCode)
+		return upstreamStatus(res.StatusCode)
 	}
 	if out == nil {
 		return nil
 	}
 	return json.NewDecoder(io.LimitReader(res.Body, 64<<10)).Decode(out)
 }
-func (a *CloudAuth) validate(ctx context.Context, token string) (authSession, int) {
-	var claims struct {
-		Active   bool            `json:"active"`
-		Issuer   string          `json:"iss"`
-		App      string          `json:"application_id"`
-		User     string          `json:"userId"`
-		Identity string          `json:"identity_type"`
-		Tenant   string          `json:"tenant_id"`
-		Scope    string          `json:"scope"`
-		Audience json.RawMessage `json:"aud"`
-		Expires  int64           `json:"exp"`
-	}
+
+type tokenClaims struct {
+	Active   bool            `json:"active"`
+	Issuer   string          `json:"iss"`
+	App      string          `json:"application_id"`
+	Client   string          `json:"client_id"`
+	User     string          `json:"userId"`
+	Identity string          `json:"identity_type"`
+	Tenant   string          `json:"tenant_id"`
+	Scope    string          `json:"scope"`
+	Audience json.RawMessage `json:"aud"`
+	Expires  int64           `json:"exp"`
+}
+
+func (a *CloudAuth) introspect(ctx context.Context, token string) (tokenClaims, int) {
+	var claims tokenClaims
 	if err := a.exchange(ctx, a.config.IntrospectionURL, url.Values{"token": {token}}, a.config.ResourceClientID, a.config.ResourceClientSecret, &claims); err != nil {
-		return authSession{}, 503
+		return tokenClaims{}, 503
 	}
 	if !claims.Active || claims.Expires <= time.Now().Unix() {
-		return authSession{}, 401
+		return tokenClaims{}, 401
 	}
 	var audience []string
 	if json.Unmarshal(claims.Audience, &audience) != nil {
@@ -184,22 +196,18 @@ func (a *CloudAuth) validate(ctx context.Context, token string) (authSession, in
 			audienceOK = true
 		}
 	}
-	if claims.Issuer != a.config.Issuer || claims.App != "portal" || !audienceOK || claims.Identity != "user" || claims.User == "" || claims.Tenant != a.config.TenantID {
-		return authSession{}, 403
+	if claims.Issuer != a.config.Issuer || claims.App != "portal" || !audienceOK || claims.Tenant != a.config.TenantID {
+		return tokenClaims{}, 403
 	}
-	scopeOK := false
-	for _, v := range strings.Fields(claims.Scope) {
-		if v == consoleScope {
-			scopeOK = true
-		}
-	}
-	if !scopeOK {
-		return authSession{}, 403
-	}
-	body := strings.NewReader(`{"applicationId":"portal","resourceType":"console","resourceId":"*","action":"manage"}`)
+	return claims, 200
+}
+
+func (a *CloudAuth) permission(ctx context.Context, token, resource, id, action string) (bool, int) {
+	payload, _ := json.Marshal(map[string]string{"applicationId": "portal", "resourceType": resource, "resourceId": id, "action": action})
+	body := strings.NewReader(string(payload))
 	req, err := http.NewRequestWithContext(ctx, "POST", a.config.PermissionURL, body)
 	if err != nil {
-		return authSession{}, 503
+		return false, 503
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -210,12 +218,29 @@ func (a *CloudAuth) validate(ctx context.Context, token string) (authSession, in
 		} `json:"data"`
 	}
 	if err = a.send(req, &decision); err != nil {
-		return authSession{}, 503
+		if err == upstreamStatus(http.StatusUnauthorized) || err == upstreamStatus(http.StatusForbidden) {
+			return false, int(err.(upstreamStatus))
+		}
+		return false, 503
 	}
 	if decision.Code != 200 || (decision.Data.Effect != "PERMIT" && decision.Data.Effect != "DENY") {
+		return false, 403
+	}
+	return decision.Data.Effect == "PERMIT", 200
+}
+
+func (a *CloudAuth) validate(ctx context.Context, token string) (authSession, int) {
+	claims, status := a.introspect(ctx, token)
+	if status != 200 {
+		return authSession{}, status
+	}
+	if claims.Identity != "user" || claims.User == "" || !slices.Contains(strings.Fields(claims.Scope), consoleScope) {
 		return authSession{}, 403
 	}
-	canManage := decision.Data.Effect == "PERMIT"
+	canManage, status := a.permission(ctx, token, "console", "*", "manage")
+	if status != 200 {
+		return authSession{}, status
+	}
 	if !canManage && a.config.TenantID == "" {
 		return authSession{}, 403
 	}

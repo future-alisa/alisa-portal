@@ -116,8 +116,8 @@ func validateHosts(hosts []string) error {
 	}
 	return nil
 }
-func registerNetworkRoutes(mux *http.ServeMux, s *Store) {
-	mux.HandleFunc("PUT /api/services/{id}", func(w http.ResponseWriter, r *http.Request) {
+func registerNetworkRoutes(mux *http.ServeMux, s *Store, auth *CloudAuth) {
+	registerResourceWrite(mux, auth, "PUT /api/services/{id}", "service", "update", func(w http.ResponseWriter, r *http.Request) {
 		var v Service
 		if !decode(w, r, &v) {
 			return
@@ -144,13 +144,13 @@ func registerNetworkRoutes(mux *http.ServeMux, s *Store) {
 				v.ID = old.ID
 				v.Status = old.Status
 				next.Services[i] = v
-				s.commit(w, next, "更新服务入口 · "+v.Name)
+				s.commit(w, r, next, v, "更新服务入口 · "+v.Name)
 				return
 			}
 		}
 		fail(w, 404, "服务不存在")
 	})
-	mux.HandleFunc("PUT /api/network-settings", func(w http.ResponseWriter, r *http.Request) {
+	registerResourceWrite(mux, auth, "PUT /api/network-settings", "network", "update", func(w http.ResponseWriter, r *http.Request) {
 		var v NetworkSettings
 		if !decode(w, r, &v) {
 			return
@@ -219,6 +219,6 @@ func registerNetworkRoutes(mux *http.ServeMux, s *Store) {
 		}
 		next := s.copy()
 		next.NetworkSettings = v
-		s.commit(w, next, "更新网络区域与内外网选址规则")
+		s.commit(w, r, next, v, "更新网络区域与内外网选址规则")
 	})
 }
