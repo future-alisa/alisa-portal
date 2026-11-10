@@ -18,6 +18,8 @@ type authFixture struct {
 	mu          sync.Mutex
 	claims      map[string]any
 	effect      string
+	permission  [3]string
+	checks      int
 	unavailable bool
 	challenge   string
 	revoked     bool
@@ -68,7 +70,12 @@ func newAuthFixture(t *testing.T) *authFixture {
 		case "/api/v1/authorization/check":
 			var body map[string]string
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			if r.Header.Get("Authorization") != "Bearer opaque-secret-token" || body["applicationId"] != "portal" || body["resourceType"] != "console" || body["resourceId"] != "*" || body["action"] != "manage" {
+			f.checks++
+			expected := f.permission
+			if expected == [3]string{} {
+				expected = [3]string{"console", "*", "manage"}
+			}
+			if r.Header.Get("Authorization") != "Bearer opaque-secret-token" || body["applicationId"] != "portal" || [3]string{body["resourceType"], body["resourceId"], body["action"]} != expected {
 				t.Error("incorrect permission boundary")
 				w.WriteHeader(403)
 				return

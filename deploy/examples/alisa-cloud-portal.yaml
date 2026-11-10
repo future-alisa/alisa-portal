@@ -8,6 +8,18 @@ alisa:
     applications:
       portal:
         "[portal:console:manage]": 管理整个门户实例（包括所有登记资源和基础设施租户）
+        "[portal:service:read]": 查看服务资源及入口
+        "[portal:service:create]": 登记服务
+        "[portal:service:update]": 更新服务及公开范围
+        "[portal:service:delete]": 移除服务
+        "[portal:tenant:read]": 查看门户命名空间
+        "[portal:tenant:create]": 登记门户命名空间
+        "[portal:deployment:read]": 查看部署申请和清单
+        "[portal:deployment:create]": 生成部署清单
+        "[portal:network:read]": 查看网络配置
+        "[portal:network:update]": 更新网络配置
+        "[portal:event:read]": 查看门户操作记录
+        "[portal:metrics:read]": 查看运行指标
   authorization:
     enabled: true
     applications:

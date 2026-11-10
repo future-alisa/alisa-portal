@@ -81,3 +81,26 @@ cd frontend && npm run dev
 验证命令 `python3 scripts/check-alisa-cloud-local.py` 会完成真实 HTTP 登录/同意/回调/管理请求/注销，并临时撤销、恢复**本地** portal-admin 的 alisa 绑定，确认只有登录而没有业务权限时不能进入门户。脚本固定请求 loopback 地址，不用于生产。运行时不要同时手动修改这个本地测试角色。
 
 协议参考：[PKCE RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)、[Token Introspection RFC 7662](https://www.rfc-editor.org/rfc/rfc7662)。这次联调验证了相关流程，不等同于完整 OAuth 安全审计或 OIDC 认证。
+
+## 第三方资源 API
+
+将配置示例中的 `portal` scope 合并进 Alisa Cloud 的应用目录。第三方客户端以 `applicationId=portal` 注册，用户委托客户端通过授权码和 PKCE 获取访问令牌。启用上游多租户时，租户管理员审批所需 scope，并在门户所属的同一个身份租户内给用户或后台应用授予资源权限。后台应用使用 `client_credentials`，门户只在设置了 `ALISA_OAUTH_TENANT_ID` 且 token 属于该租户时接受应用身份。
+
+客户端用 `Authorization: Bearer <access_token>` 调用以下接口。门户对每次请求内省 token，要求匹配的 scope，并把资源类型、资源 ID 和动作发给 Alisa Cloud 权限服务。列表、创建和单例配置使用资源 ID `*`。单个服务的读取、更新和删除可以只授权具体服务 ID。身份租户限制的是可访问此门户实例的身份，门户登记的基础设施命名空间仍是该实例的资源。
+
+| 方法和路径 | Scope |
+| --- | --- |
+| `GET /api/oauth/services` 或 `GET /api/oauth/services/{id}` | `portal:service:read` |
+| `POST /api/oauth/services` | `portal:service:create` |
+| `PUT /api/oauth/services/{id}` | `portal:service:update` |
+| `DELETE /api/oauth/services/{id}` | `portal:service:delete` |
+| `GET /api/oauth/tenants` | `portal:tenant:read` |
+| `POST /api/oauth/tenants` | `portal:tenant:create` |
+| `GET /api/oauth/deployments` | `portal:deployment:read` |
+| `POST /api/oauth/deployments` | `portal:deployment:create` |
+| `GET /api/oauth/network-settings` | `portal:network:read` |
+| `PUT /api/oauth/network-settings` | `portal:network:update` |
+| `GET /api/oauth/events` | `portal:event:read` |
+| `GET /api/oauth/metrics` | `portal:metrics:read` |
+
+创建返回 `201` 和新资源，更新返回 `200` 和已保存的资源，删除返回 `204`。门户浏览器会话和整实例管理接口继续使用 `portal:console:manage`。第三方资源 API 独立检查上表中的权限，服务更新权限也涵盖公开范围的修改。
