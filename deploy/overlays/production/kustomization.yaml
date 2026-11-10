@@ -5,9 +5,9 @@ resources:
 images:
   - name: alisa-portal-api
     newName: registry.kind.internal:5000/alisa-portal-api
-    newTag: src-3b90f14cf61f
-    digest: sha256:80c3c43b038c4b935a1f75219bc290d8c34050dce659dc0486556540feb6b0c1
+    newTag: src-9e66eacf58a2
+    digest: sha256:2f21bb7dd4108eae0dc65fdb7086387e13b06d6bb382a64132b574db469ded94
   - name: alisa-portal-web
     newName: registry.kind.internal:5000/alisa-portal-web
-    newTag: src-3b90f14cf61f
-    digest: sha256:01c51928af1f90c9d411b2281fb5352fd34e697409cf7771a9774d3ea33e0642
+    newTag: src-9e66eacf58a2
+    digest: sha256:e0a8a0c9c3a5352aa4c8f3a82f9d6fdcc9595293f3779f52d12bf7e04eee3358
