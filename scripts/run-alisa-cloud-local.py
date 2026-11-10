@@ -31,6 +31,12 @@ if new:
  schema+='\nINSERT INTO tb_user(user_id,user_name,user_password,user_email) VALUES('+','.join(literal(x) for x in [account['userId'],account['username'],hashed,account['email']])+');\n'
  (private/'schema.sql').write_text(schema)
 cfg={'server':{'port':9091,'address':'127.0.0.1','servlet':{'session':{'cookie':{'name':'ALISA_LOCAL_AUTH_SESSION','same-site':'lax','http-only':True}}}},'spring':{'cloud':{'nacos':{'discovery':{'enabled':False},'config':{'enabled':False,'import-check':{'enabled':False}}},'discovery':{'enabled':False}},'datasource':{'driver-class-name':'org.h2.Driver','url':'jdbc:h2:file:'+str(private/'authorization')+';MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE','username':'sa','password':runtime['dbPassword']},'sql':{'init':{'mode':'always' if new else 'never','schema-locations':'file:'+str(private/'schema.sql')}}},'jwt':{'secret':runtime['jwtSecret']},'alisa':{'oauth':{'enabled':True,'issuer':'http://127.0.0.1:9091','allow-loopback-redirects':True,'applications':{'portal':{'[portal:console:manage]':'管理门户实例'}}},'authorization':{'enabled':True,'applications':{'portal':'local'},'administrators':[account['userId']]},'tenancy':{'enabled':False}},'logging':{'level':{'root':'INFO','org.springframework.security':'INFO','org.springframework.jdbc':'INFO'}}}
+# Tomcat keeps the saved OAuth request and its CSRF token together across
+# orderly local restarts. Store sessions beside the private H2 database.
+sessions=private/'sessions'
+sessions.mkdir(mode=0o700,exist_ok=True)
+sessions.chmod(0o700)
+cfg['server']['servlet']['session'].update(persistent=True, **{'store-dir':str(sessions)})
 if args.csrf_debug:cfg['logging']['level']['com.alisa.user.oauth.OAuthConfiguration']='DEBUG'
 config=private/'application.yaml';config.write_text(json.dumps(cfg,ensure_ascii=False));config.chmod(0o600)
 print('Starting real alisa-user on http://127.0.0.1:9091; independent persistent local H2 database',flush=True)
