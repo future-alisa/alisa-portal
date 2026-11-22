@@ -23,5 +23,5 @@ images:
     digest: sha256:2f21bb7dd4108eae0dc65fdb7086387e13b06d6bb382a64132b574db469ded94
   - name: alisa-portal-web
     newName: registry.kind.internal:5000/alisa-portal-web
-    newTag: src-9e66eacf58a2
-    digest: sha256:e0a8a0c9c3a5352aa4c8f3a82f9d6fdcc9595293f3779f52d12bf7e04eee3358
+    newTag: src-f40c38f08c4c-ecr
+    digest: sha256:55a004b0e6beeab56f936a2c852a67e554b08c7dfa12d0f0d7169220bf1a996c
