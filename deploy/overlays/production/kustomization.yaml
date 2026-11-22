@@ -2,6 +2,20 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
+patches:
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: PROMETHEUS_URL
+                    value: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
 images:
   - name: alisa-portal-api
     newName: registry.kind.internal:5000/alisa-portal-api
