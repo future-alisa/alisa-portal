@@ -37,7 +37,9 @@ python3 scripts/make-build-context.py \
 
 ### 网络受限时的构建
 
-可为构建命令添加 `--proxy http://YOUR_PROXY_HOST:PORT`。仅用于构建器下载和 Dockerfile RUN 的代理构建参数，不写入最终镜像环境。使用 `--component web` 只构建前端，`--attempt` 区分重试 Job。仓库连接的代理应在 Argo CD 单独配置，不修改集群全局代理。
+在 Windows 构建环境里设置 `PORTAL_BUILD_PROXY`，值为 Pod 可达的宿主机 HTTP CONNECT 代理地址（`http://HOST:PORT`）。前后端构建 Job 都会把它传给 Kaniko 和 Dockerfile 的 RUN 步骤。通过 `PORTAL_BUILD_NO_PROXY` 可追加逗号分隔的直连地址。目标私有 Registry、回环地址和集群 Service 域名默认直连。
+
+`--proxy` 可覆盖环境变量，`--direct` 可执行一次直连构建。构建代理仅用于镜像构建步骤，Kubernetes 节点拉取 Job 容器镜像、Argo CD 拉取 Git 和运行中的门户分别使用各自网络配置。使用 `--component web` 只构建前端，`--attempt` 区分重试 Job。
 
 后端也可使用已验证的本机 Go 工具链交叉编译，再通过 crane 复用你仓库已有的 Alpine 3.22 打包：
 
